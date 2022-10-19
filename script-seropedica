@@ -19,8 +19,6 @@ from datetime import date
 
 # Dataframe da previsao RAMS e observacao INMET
 
-#df_observacao = pd.read_csv("C:/Users/leanderson/Documents/DataTable/20220805-inmet-seropedica.csv",encoding="UTF-8", sep = ";")
-#df_previsao = pd.read_csv("C:/Users/leanderson/Documents/DataTable/20220805-rams-seropedica.csv",  encoding="UTF-8", sep = ";")
 #df_observacao = pd.read_csv("20220519-inmet-seropedica.csv", encoding="UTF-8", sep = ";")
 #df_previsao   = pd.read_csv("20220519-rams-seropedica.csv", encoding="UTF-8", sep = ";")
 
