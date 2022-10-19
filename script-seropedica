@@ -1,0 +1,389 @@
+import pandas as pd
+import numpy as np
+import math
+import statistics
+from statistics import median
+import skill_metrics as sm
+from sklearn.metrics import mean_squared_error
+from sklearn.metrics import mean_absolute_error
+from sklearn.metrics import mean_absolute_percentage_error
+from sklearn.metrics import median_absolute_error
+import dataframe_image as di 
+import matplotlib
+import matplotlib.pyplot as plt
+import df2img 
+from windrose import WindroseAxes 
+import matplotlib.cm as cm
+import datetime
+from datetime import date
+
+# Dataframe da previsao RAMS e observacao INMET
+
+#df_observacao = pd.read_csv("C:/Users/leanderson/Documents/DataTable/20220805-inmet-seropedica.csv",encoding="UTF-8", sep = ";")
+#df_previsao = pd.read_csv("C:/Users/leanderson/Documents/DataTable/20220805-rams-seropedica.csv",  encoding="UTF-8", sep = ";")
+#df_observacao = pd.read_csv("20220519-inmet-seropedica.csv", encoding="UTF-8", sep = ";")
+#df_previsao   = pd.read_csv("20220519-rams-seropedica.csv", encoding="UTF-8", sep = ";")
+
+# Excluindo as linhas 24 a 72 da tabela de previsão
+
+for linha in df_previsao.index[24:]:
+    df_previsao = df_previsao.drop([linha], axis = 0)
+        
+# Substituindo "," por "ponto" da tabela de observação
+
+df_observacao = df_observacao.replace({',':'.'}, regex=True)
+
+# Preenchendo com zero o NaN
+
+df_observacao = df_observacao.fillna(0)
+df_previsao   = df_previsao.fillna(0)
+
+# Convertendo texto/string (object) para float
+
+for col in df_observacao.columns[2:]:
+    df_observacao[col] = pd.to_numeric(df_observacao[col], errors='coerce')
+
+# Manipulando Data e Hora e convertendo para datetime
+
+df_observacao["Data"] = df_observacao["Data"].map(str) + " " + (df_observacao["Hora (UTC)"] // 100).map(str) + ":" + \
+                                                                            (df_observacao["Hora (UTC)"] // 1 % 100).map(str)
+df_observacao["Data"] = pd.to_datetime(df_observacao["Data"], format='%d/%m/%Y %H:%M')
+
+df_previsao["Data"]   = df_previsao["Data"].map(str) + " " + (df_previsao["Hora (UTC)"] // 100).map(str) + ":" + \
+                                                                            (df_previsao["Hora (UTC)"] // 1 % 100).map(str)
+df_previsao["Data"]   = pd.to_datetime(df_previsao["Data"], format='%d/%m/%Y %H:%M')
+
+# Removendo colunas inservíveis
+
+df_observacao = df_observacao.drop(columns=["Hora (UTC)", "Temp. Max. (C)", "Temp. Min. (C)", "Umi. Max. (%)", "Umi. Min. (%)",
+                                            "Pto Orvalho Ins. (C)", "Pto Orvalho Max. (C)", "Pto Orvalho Min. (C)",
+                                            "Pressao Max. (hPa)","Pressao Min. (hPa)",
+                                            "Raj. Vento (m/s)", "Radiacao (KJ/m²)"])
+df_previsao   = df_previsao.drop(columns=["Hora (UTC)", "Unnamed: 8"], axis = 1)
+
+# Configurando a coluna de Data como index
+
+df_observacao = df_observacao.set_index("Data")
+df_previsao   = df_previsao.set_index("Data")
+
+# Imprimindo as tabelas
+#print(df_observacao)
+#print(df_previsao)
+display(df_observacao)
+display(df_previsao)
+
+# Imprimindo as informações das tabelas
+print(df_observacao.info())
+print(df_previsao.info())
+
+# Criando as listas para o DataFrame dos índices estatísticos da observação
+variaveis     = ["Temp. Ins. (C)","Umi. Ins. (%)","Pressao Ins. (hPa)","Vel. Vento (m/s)","Dir Vento (graus)","Chuva (mm)"]
+media_obs     = []
+desvio_obs    = []
+variancia_obs = []
+
+for col in df_observacao.columns[0:]:
+    media_obs.append(df_observacao[col].mean())
+    desvio_obs.append(df_observacao[col].std())
+    variancia_obs.append(df_observacao[col].var())
+
+# Dataframe dos indices estatísticos da observação
+df_indices_observacao = pd.DataFrame((zip(variaveis, media_obs, desvio_obs, variancia_obs)),
+                                   columns = ["variaveis","média","desvio","variância"])
+df_indices_observacao = df_indices_observacao.round(1) # Arredondando a casa decimal
+
+# Criando as listas para o DataFrame dos índices estatísticos da previsão
+media_pre     = []
+desvio_pre    = []
+variancia_pre = []
+
+for col in df_previsao.columns[0:]:
+    media_pre.append(df_previsao[col].mean())
+    desvio_pre.append(df_previsao[col].std())
+    variancia_pre.append(df_previsao[col].var())
+    
+# Dataframe dos indices estatísticos da previsão
+df_indices_previsao = pd.DataFrame((zip(variaveis, media_pre, desvio_pre, variancia_pre)),
+                                   columns = ["variaveis","média","desvio","variância"])
+df_indices_previsao = df_indices_previsao.round(1) # Arredondando a casa decimal
+
+# Criando as listas para o DataFrame dos índices estatísticos previsão x observação
+mbe         = []
+mae         = []
+mse         = []
+rmse        = []
+medae       = []
+mape        = []
+list_erro1_abs = []
+
+for colobs, colpre in zip(df_observacao.columns[0:], df_previsao.columns[0:]):
+    if colobs != "Dir. Vento (m/s)":
+        mbe.append((df_observacao[colobs] - df_previsao[colpre]).mean())
+        mae.append(mean_absolute_error(df_observacao[colobs], df_previsao[colpre]))
+        mse.append(mean_squared_error(df_observacao[colobs], df_previsao[colpre]))
+        rmse.append(math.sqrt(mean_squared_error(df_observacao[colobs], df_previsao[colpre])))
+        medae.append(median_absolute_error(df_observacao[colobs], df_previsao[colpre]))
+        mape.append(mean_absolute_percentage_error(df_observacao[colobs], df_previsao[colpre]))
+
+#Corrigindo o erro para direção do vento
+    else:
+        soma1 = 0.0
+        soma1_abs = 0.0
+        soma1_abs_div_obs = 0.0
+        soma2 = 0.0
+        n = 0
+        for erro, obs in zip((df_observacao[colobs] - df_previsao[colpre]), df_observacao[colobs]):
+            erro1 = erro
+            erro1_abs = abs(erro)
+            erro2 = erro**2
+            if abs(erro) > 180:
+                erro1 = (erro)*(1 - (360/(abs(erro))))
+                erro1_abs = abs((erro)*(1 - (360/(abs(erro)))))                
+                erro2 = ((erro)*(1 - (360/(abs(erro)))))**2
+            soma1 = soma1 + erro1
+            soma1_abs = soma1_abs + erro1_abs
+            soma1_abs_div_obs = soma1_abs_div_obs + (erro1_abs/obs)
+            soma2 = soma2 + erro2
+            list_erro1_abs.append(erro1_abs)
+            n = n + 1
+        mbe.append(soma1/n)
+        mae.append(soma1_abs/n)
+        mse.append(soma2/n)
+        rmse.append(math.sqrt(soma2/n))
+        medae.append(median(list_erro1_abs))
+        mape.append(soma1_abs_div_obs/n)
+
+# Dataframe dos indices estatísticos da previsão x observação
+df_indices_pre_x_obs = pd.DataFrame((zip(variaveis, mbe, mae, mse, rmse, medae, mape)),
+                                     columns = ["variaveis","MBE(bias)","MAE","MSE","RMSE","MEDAE","MAPE"])
+df_indices_pre_x_obs = df_indices_pre_x_obs.round(1)
+
+# Impressão das estatísticas
+#display(df_indices_observacao)
+#display(df_indices_previsao)
+#display(df_indices_pre_x_obs)
+
+# Exportando os DataFrames para planilhas excel .xlsx 
+df_indices_observacao.to_excel("indices_observacao_seropedica.xlsx", index = False)
+df_indices_previsao.to_excel("indices_previsao_seropedica.xlsx", index = False)
+df_indices_pre_x_obs.to_excel("indices_pre_x_obs_seropedica.xlsx", index = False)
+
+# Removendo o índice (primeira coluna) e exportando os DataFrames para figuras .png modelo 1
+df_reset_obs = df_indices_observacao.set_index("variaveis")
+di.export(df_reset_obs, "indices_observacao_mod1_seropedica.png")
+df_reset_pre = df_indices_previsao.set_index("variaveis")
+di.export(df_reset_pre, "indices_previsao_mod1_seropedica.png")
+df_reset_pre_x_obs = df_indices_previsao.set_index("variaveis")
+di.export(df_reset_pre_x_obs, "indices_previsao_x_observacao_mod1_seropedica.png")
+
+# Criando e formatando as tabelas .png
+df_indices_observacao = df2img.plot_dataframe(df_indices_observacao,
+                                print_index = False,
+                                title = dict(text = "Índices Estatísticos - INMET",
+                                font_color  = "black",
+                                font_size   = 20,                               
+                                font_family ="arial black"), 
+                                                                       
+                                tbl_cells  = dict(align="right",
+                                fill_color = "white",
+                                font_color = "black",
+                                font_size  = 12,
+                                font_family ="arial black"), 
+                                               
+                                tbl_header = dict(align="center",
+                                fill_color = "red",
+                                font_color = "white",
+                                font_size  = 18,
+                                font_family ="arial black"),               
+                                fig_size   = (600, 250))
+
+df_indices_previsao = df2img.plot_dataframe(df_indices_previsao,
+                                print_index = False,
+                                title       = dict(text = "Índices Estatísticos - RAMS",
+                                font_color  = "black",
+                                font_size   = 20,                                
+                                font_family ="arial black"),
+                                                                       
+                                tbl_cells  = dict(align="right",
+                                fill_color = "white",
+                                font_color = "black",
+                                font_size  = 12,
+                                font_family ="arial black"),
+                                
+                                               
+                                tbl_header = dict(align="center",
+                                fill_color = "red",
+                                font_color = "white",
+                                font_size  = 18,                                
+                                font_family ="arial black"),          
+                                fig_size   = (600, 250))
+
+df_indices_pre_x_obs = df2img.plot_dataframe(df_indices_pre_x_obs,
+                                print_index = False,
+                                title = dict(text = "Índices Estatísticos - INMET X RAMS",
+                                font_color  = "black",
+                                font_size   = 20,
+                                font_family ="arial black"),                                         
+           
+                                tbl_cells  = dict(align="right",
+                                fill_color = "white",
+                                font_color = "black",
+                                font_size  = 10,
+                                font_family ="arial black"),
+                                               
+                                tbl_header = dict(align="center",
+                                fill_color = "red",
+                                font_color = "white",
+                                font_size  = 18,
+                                font_family ="arial black"),
+                                fig_size = (900, 450))
+
+
+# Exportando os DataFrames para figuras .png modelo 2
+df2img.save_dataframe(df_indices_observacao, "indices_observacao_mod2_seropedica.png")
+df2img.save_dataframe(df_indices_previsao, "indices_previsao_mod2_seropedica.png")
+df2img.save_dataframe(df_indices_pre_x_obs, "indices_pre_x_obs_mod2_seropedica.png")
+
+# Criando os gráficos de linha para comparação de previsão x observação
+
+for colvar, colobs, colpre in zip(variaveis, df_observacao.columns[0:], df_previsao.columns[0:]):
+    plt.figure(figsize=(8, 6))
+    fig, ax = plt.subplots()
+    
+    df_observacao[colobs].plot(label = "INMET", color="red", marker="o" )    
+    df_previsao[colpre].plot(label = "RAMS", color="blue")
+    
+        
+    plt.xlabel("Data e Hora", fontsize = 12)
+    
+    plt.ylabel(colvar, fontsize = 12)
+    plt.xticks(rotation=30, ha="right")   
+    
+    if colvar == "Temp. Ins. (C)":
+        ax.set(ylim=(0, 40), yticks=np.arange(0, 45, 5)) 
+        
+    if colvar == "Umi. Ins. (%)":
+        ax.set(ylim=(0, 100), yticks=np.arange(0, 110, 10))
+
+    if colvar == "Pressao Ins. (hPa)":
+        ax.set(ylim=(820, 1025), yticks=np.arange(820, 1030, 15))
+        plt.legend(loc='upper left')
+        
+    if colvar == "Vel. Vento (m/s)":
+         ax.set(ylim=(0, 12), yticks=np.arange(0, 14, 2))
+            
+    if colvar == "Dir. Vento (m/s)":
+        ax.set(ylim=(0, 350), yticks=np.arange(0, 440, 90)) 
+        
+    if  colvar == "Chuva (mm)":
+        ax.set(ylim=(0, 80), yticks=np.arange(0, 90, 10)) 
+        
+    plt.grid(alpha = 0.4) 
+    plt.legend() 
+        
+          
+    figname = colvar.split('.')[0] + "_seropedica.jpg"
+    plt.savefig(figname, dpi=150, bbox_inches="tight", pad_inches=0.1)
+    plt.show()
+    
+    
+# Rosa dos ventos da previsão
+
+dire1 = df_previsao["Dir. Vento (m/s)"]   #direção
+velo1 = df_previsao["Vel. Vento (m/s)"]   #velocidade
+
+ax = WindroseAxes.from_ax()
+ax.bar(dire1, velo1, normed = True, opening = 0.8, edgecolor = "white", bins=np.arange(0, 10, 2))
+ax.set_legend(frameon = True, loc=(1.1, 0), shadow = False, title = " velocidade (m/s)", fontsize = 18)
+
+plt.title("Rosa dos ventos - RAMS - Seropedica", y=1.08)
+plt.savefig("rosa_prev_seropedica.jpg", dpi=300, bbox_inches="tight", pad_inches=0)
+
+# Rosa dos ventos da observação
+
+dire2 = df_observacao['Dir. Vento (m/s)']   #direção
+velo2 = df_observacao['Vel. Vento (m/s)']   #velocidade
+
+ax = WindroseAxes.from_ax()
+ax.bar(dire2, velo2, normed = True, opening=0.8, edgecolor='white', bins=np.arange(0, 10, 2))
+ax.set_legend(frameon = True, loc=(1.1, 0), shadow = False, title = " velocidade (m/s)", fontsize = 18)
+
+plt.title("Rosa dos ventos - INMET - Seropedica", y=1.08)
+plt.savefig("rosa_obs_seropedica.jpg", dpi=300, bbox_inches="tight", pad_inches=0)
+
+
+# Gráficos de dispersão para comparação previsão x observação
+
+for colvar, colobs, colpre in zip(variaveis, df_observacao.columns[0:], df_previsao.columns[0:]):
+    obs  = df_observacao[colobs]
+    pre  = df_previsao[colpre]
+    plt.figure(figsize = (8, 6))
+    
+    plt.scatter(pre, obs, c = "blue", linewidths = 2, marker = "o", edgecolor = "blue", s = 50, label = "RAMS")
+    plt.scatter(obs, pre, c = "red",  linewidths = 2, marker = "o", edgecolor = "red",  s = 50, label = "INMET")
+    
+    if colvar == "Temp. Ins. (C)":
+        plt.xlabel("temperatura (°C) - INMET")
+        plt.ylabel("temperatura (°C) - RAMS")
+        plt.title("Temperatura Absoluta do Ar")
+        plt.plot([0, 5, 35], [0, 5, 35], "k")
+    
+    if colvar == "Umi. Ins. (%)":
+        plt.xlabel("umidade relativa do ar (%) - INMET")
+        plt.ylabel("umidade relativa do ar (%) - RAMS")
+        plt.title("Umidade Relativa do Ar")
+        plt.plot([0, 10, 100], [0, 10, 100], "k")
+        
+    if colvar == "Pressao Ins. (hPa)":
+        plt.xlabel("pressão atmosférica (hPa) - INMET")
+        plt.ylabel("pressão atmosférica (hPa) - RAMS")
+        plt.title("Pressão Atmosférica")
+        plt.plot([1000, 1010, 1020], [1000, 1010, 1020], "k")
+        
+    if colvar == "Vel. Vento (m/s)":
+        plt.xlabel("velocidade do vento (m/s) - INMET")
+        plt.ylabel("velocidade do vento (m/s) - RAMS")
+        plt.title("Velocidade do vento")
+        plt.plot([0, 4, 8], [0, 4, 8], "k")       
+       
+    if colvar == "Dir. Vento (m/s)":
+        plt.xlabel("direção do vento (graus) - INMET")
+        plt.ylabel("direção do vento (graus) - RAMS")
+        plt.title("Direção do vento")
+        plt.plot([0, 180, 350], [0, 180, 350], "k")
+       
+    if colvar == "Chuva (mm)":
+        plt.xlabel("chuva (mm) - INMET")
+        plt.ylabel("chuva (mm) - RAMS")
+        plt.title("preciptação")
+        plt.plot([0, 5, 20], [0, 5, 20], "k")
+        
+    plt.grid(alpha = 0.4)
+    plt.legend(loc="upper right")
+    
+     
+    
+    figname = colvar.split('.')[0] + "_disp_seropedica.jpg"
+    plt.savefig(figname, dpi = 150, bbox_inches="tight", pad_inches=0.1)
+    plt.show()
+    
+
+
+    
+#poderá sair 
+#estudar sobre histograma de frequencia
+chuva1  = df_observacao["Chuva (mm)"]
+chuva2  = df_previsao["Chuva (mm)"]
+
+colors = ["blue", "red"]
+plt.figure(figsize=(10, 8), dpi=80)
+plt.hist([chuva1, chuva2], bins = 80, color = colors, label = colors)
+plt.grid(alpha = 0.4)
+
+plt.title("chuva em milimetros - histograma de frequência", fontsize = 18)
+plt.xlabel("chuva", fontsize = 16)
+plt.ylabel("frequência", fontsize = 16)
+#plt.axes().yaxis.grid()
+plt.show()
+
+
