@@ -1,5 +1,5 @@
 ---
-title: "Untitled"
+title: "min"
 date: "2023-08-22"
 output: html_document
 ---
@@ -8,7 +8,17 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
+
+**primeira aula**
+
+**22 de agosto de 2023**
+
 teste para ver se funciona
 
 pelo visto funcionou :)
 
+
+
+**gatinho teclando**
+
+![](https://c.tenor.com/CrWHpzxIZYEAAAAC/cat-typing-gif.gif)
